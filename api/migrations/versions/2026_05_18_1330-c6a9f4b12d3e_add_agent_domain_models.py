@@ -1,7 +1,7 @@
 """add agent domain models
 
 Revision ID: c6a9f4b12d3e
-Revises: a4f2d8c9b731
+Revises: f6a7b8c9d012
 Create Date: 2026-05-18 13:30:00.000000
 
 """
@@ -13,7 +13,7 @@ import models
 
 # revision identifiers, used by Alembic.
 revision = "c6a9f4b12d3e"
-down_revision = "a4f2d8c9b731"
+down_revision = "f6a7b8c9d012"
 branch_labels = None
 depends_on = None
 

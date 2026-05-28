@@ -1,7 +1,7 @@
 """add learn dify flag to recommended apps
 
 Revision ID: f5e8a9c0d2b3
-Revises: a4f2d8c9b731
+Revises: c6a9f4b12d3e
 Create Date: 2026-05-18 15:00:00.000000
 
 """
@@ -11,7 +11,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "f5e8a9c0d2b3"
-down_revision = "a4f2d8c9b731"
+down_revision = "c6a9f4b12d3e"
 branch_labels = None
 depends_on = None
 
