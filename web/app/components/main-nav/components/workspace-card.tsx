@@ -11,56 +11,23 @@ import {
   DropdownMenuTrigger,
 } from '@langgenius/dify-ui/dropdown-menu'
 import { toast } from '@langgenius/dify-ui/toast'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plan } from '@/app/components/billing/type'
 import { ACCOUNT_SETTING_TAB } from '@/app/components/header/account-setting/constants'
 import LicenseNav from '@/app/components/header/license-env'
-import { buildIntegrationPath } from '@/app/components/tools/integration-routes'
+import { buildIntegrationPath } from '@/app/components/integrations/routes'
 import { IS_CLOUD_EDITION } from '@/config'
 import { useAppContext } from '@/context/app-context'
 import { useModalContext } from '@/context/modal-context'
 import { useProviderContext } from '@/context/provider-context'
-import { useWorkspacesContext } from '@/context/workspace-context'
 import { useRouter } from '@/next/navigation'
-import { switchWorkspace } from '@/service/common'
+import { consoleQuery } from '@/service/client'
 import { basePath } from '@/utils/var'
-import { formatCredits, getRemainingCredits, getWorkspaceInitial } from '../utils'
+import { formatCredits, getRemainingCredits } from '../utils'
+import { WorkspaceIcon, WorkspaceMenuItemContent } from './workspace-menu-content'
 import WorkspacePlanBadge from './workspace-plan-badge'
-
-function WorkspaceIcon({
-  name,
-  className,
-}: {
-  name?: string
-  className?: string
-}) {
-  return (
-    <div className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-components-icon-bg-orange-dark-solid text-white shadow-xs', className)}>
-      <span className="system-md-semibold">{getWorkspaceInitial(name)}</span>
-    </div>
-  )
-}
-
-function WorkspaceMenuItemContent({
-  icon,
-  label,
-  trailing,
-}: {
-  icon: ReactNode
-  label: ReactNode
-  trailing?: ReactNode
-}) {
-  const labelTitle = typeof label === 'string' ? label : undefined
-
-  return (
-    <>
-      <span aria-hidden className="flex h-4 w-4 shrink-0 items-center justify-center text-text-tertiary">{icon}</span>
-      <span className="min-w-0 flex-1 truncate text-left system-md-regular text-text-secondary" title={labelTitle}>{label}</span>
-      {trailing && <span className="flex h-4 w-4 shrink-0 items-center justify-center">{trailing}</span>}
-    </>
-  )
-}
 
 const workspaceMenuTriggerHeight = 36
 const workspaceCardSkeletonClassName = 'animate-pulse rounded bg-text-quaternary opacity-20 motion-reduce:animate-none'
@@ -75,7 +42,6 @@ function WorkspaceCardSkeleton({
   return (
     <div
       aria-hidden="true"
-      data-testid="workspace-card-skeleton"
       className="overflow-hidden rounded-xl border border-components-card-border bg-components-card-bg shadow-xs"
     >
       <div className="flex w-full items-center gap-1.5 py-1.5 pr-3 pl-1.5">
@@ -224,7 +190,9 @@ export function WorkspaceCard() {
   const { t } = useTranslation()
   const router = useRouter()
   const { currentWorkspace, isCurrentWorkspaceDatasetOperator, isCurrentWorkspaceManager, isLoadingCurrentWorkspace } = useAppContext()
-  const { workspaces } = useWorkspacesContext()
+  const { data: workspacesData } = useQuery(consoleQuery.workspaces.get.queryOptions())
+  const switchWorkspaceMutation = useMutation(consoleQuery.workspaces.switch.post.mutationOptions())
+  const workspaces = workspacesData?.workspaces ?? []
   const { enableBilling, plan } = useProviderContext()
   const { setShowPricingModal, setShowAccountSettingModal } = useModalContext()
   const credits = getRemainingCredits(currentWorkspace.trial_credits, currentWorkspace.trial_credits_used)
@@ -245,7 +213,7 @@ export function WorkspaceCard() {
       if (currentWorkspace.id === tenant_id)
         return
 
-      await switchWorkspace({ url: '/workspaces/switch', body: { tenant_id } })
+      await switchWorkspaceMutation.mutateAsync({ body: { tenant_id } })
       toast.success(t('actionMsg.modifiedSuccessfully', { ns: 'common' }))
       location.assign(`${location.origin}${basePath}`)
     }

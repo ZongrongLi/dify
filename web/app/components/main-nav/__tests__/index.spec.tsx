@@ -2,26 +2,28 @@ import type { Mock } from 'vitest'
 import type { AppContextValue } from '@/context/app-context'
 import type { ModalContextState } from '@/context/modal-context'
 import type { ProviderContextState } from '@/context/provider-context'
+import type { IWorkspace } from '@/models/common'
 import type { InstalledApp } from '@/models/explore'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
-import { renderWithSystemFeatures } from '@/__tests__/utils/mock-system-features'
+import { Provider as JotaiProvider } from 'jotai'
+import { createTestQueryClient, renderWithSystemFeatures } from '@/__tests__/utils/mock-system-features'
 import { Plan } from '@/app/components/billing/type'
-import { LEARN_DIFY_HIDDEN_STORAGE_KEY } from '@/app/components/explore/learn-dify/storage'
+import { LEARN_DIFY_HIDDEN_STORAGE_KEY } from '@/app/components/explore/learn-dify/atoms'
 import { GOTO_ANYTHING_OPEN_EVENT } from '@/app/components/goto-anything/hooks'
 import { ACCOUNT_SETTING_TAB } from '@/app/components/header/account-setting/constants'
 import { useAppContext } from '@/context/app-context'
 import { useModalContext } from '@/context/modal-context'
 import { useProviderContext } from '@/context/provider-context'
-import { useWorkspacesContext } from '@/context/workspace-context'
 import { usePathname, useRouter } from '@/next/navigation'
-import { switchWorkspace } from '@/service/common'
+import { consoleQuery } from '@/service/client'
 import { useGetInstalledApps, useUninstallApp, useUpdateAppPinStatus } from '@/service/use-explore'
 import { AppModeEnum } from '@/types/app'
 import MainNav from '../index'
 
 const activeEdgeClassName = 'before:pointer-events-none'
 
-const { mockToastSuccess } = vi.hoisted(() => ({
+const { mockSwitchWorkspace, mockToastSuccess } = vi.hoisted(() => ({
+  mockSwitchWorkspace: vi.fn(),
   mockToastSuccess: vi.fn(),
 }))
 
@@ -37,10 +39,6 @@ vi.mock('@/context/modal-context', () => ({
   useModalContext: vi.fn(),
 }))
 
-vi.mock('@/context/workspace-context', () => ({
-  useWorkspacesContext: vi.fn(),
-}))
-
 vi.mock('@/next/navigation', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/next/navigation')>()
   return {
@@ -50,9 +48,39 @@ vi.mock('@/next/navigation', async (importOriginal) => {
   }
 })
 
-vi.mock('@/service/common', () => ({
-  switchWorkspace: vi.fn(),
-}))
+vi.mock('@/service/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/service/client')>()
+  const workspacesQueryKey = ['console', 'workspaces', 'get'] as const
+  const consoleQuery = new Proxy(actual.consoleQuery, {
+    get(target, prop, receiver) {
+      if (prop === 'workspaces') {
+        return {
+          get: {
+            queryKey: () => workspacesQueryKey,
+            queryOptions: () => ({
+              queryKey: workspacesQueryKey,
+              queryFn: () => new Promise(() => {}),
+            }),
+          },
+          switch: {
+            post: {
+              mutationOptions: () => ({
+                mutationFn: (variables: unknown) => mockSwitchWorkspace(variables),
+              }),
+            },
+          },
+        }
+      }
+
+      return Reflect.get(target, prop, receiver)
+    },
+  })
+
+  return {
+    ...actual,
+    consoleQuery,
+  }
+})
 
 vi.mock('@/service/use-explore', () => ({
   useGetInstalledApps: vi.fn(),
@@ -91,7 +119,7 @@ vi.mock('@/app/components/app-sidebar/dataset-detail-top', () => ({
   default: () => <div data-testid="dataset-detail-top" />,
 }))
 
-vi.mock('@/features/agent-v2/navigation/agent-detail-navigation', () => ({
+vi.mock('@/features/agent-v2/agent-detail/navigation', () => ({
   AgentDetailSection: () => <div data-testid="agent-detail-section" />,
   AgentDetailTop: () => <div data-testid="agent-detail-top" />,
 }))
@@ -116,6 +144,8 @@ const mockUninstall = vi.fn()
 const mockUpdatePinStatus = vi.fn()
 let mockPathname = '/apps'
 let mockInstalledApps: InstalledApp[] = []
+let mockInstalledAppsPending = false
+let mockWorkspaces: IWorkspace[] = []
 
 const createInstalledApp = (overrides: Partial<InstalledApp> = {}): InstalledApp => ({
   id: overrides.id ?? 'installed-1',
@@ -177,7 +207,11 @@ const appContextValue: AppContextValue = {
 
 const renderMainNav = (
   systemFeatures = { branding: { enabled: false } },
-) => renderWithSystemFeatures(<MainNav />, { systemFeatures })
+) => {
+  const queryClient = createTestQueryClient()
+  queryClient.setQueryData(consoleQuery.workspaces.get.queryKey(), { workspaces: mockWorkspaces })
+  return renderWithSystemFeatures(<JotaiProvider><MainNav /></JotaiProvider>, { systemFeatures, queryClient })
+}
 
 describe('MainNav', () => {
   beforeEach(() => {
@@ -185,6 +219,11 @@ describe('MainNav', () => {
     localStorage.clear()
     mockPathname = '/apps'
     mockInstalledApps = []
+    mockInstalledAppsPending = false
+    mockWorkspaces = [
+      { id: 'workspace-1', name: 'Solar Studio', plan: Plan.team, status: 'normal', created_at: 0, current: true },
+      { id: 'workspace-2', name: 'Evan Workspace', plan: Plan.sandbox, status: 'normal', created_at: 0, current: false },
+    ]
 
     ;(usePathname as Mock).mockImplementation(() => mockPathname)
     ;(useRouter as Mock).mockReturnValue({
@@ -207,14 +246,8 @@ describe('MainNav', () => {
       setShowPricingModal: mockSetShowPricingModal,
       setShowAccountSettingModal: mockSetShowAccountSettingModal,
     } as unknown as ModalContextState)
-    ;(useWorkspacesContext as Mock).mockReturnValue({
-      workspaces: [
-        { id: 'workspace-1', name: 'Solar Studio', plan: Plan.team, status: 'normal', created_at: 0, current: true },
-        { id: 'workspace-2', name: 'Evan Workspace', plan: Plan.sandbox, status: 'normal', created_at: 0, current: false },
-      ],
-    })
     ;(useGetInstalledApps as Mock).mockImplementation(() => ({
-      isPending: false,
+      isPending: mockInstalledAppsPending,
       data: { installed_apps: mockInstalledApps },
     }))
     ;(useUninstallApp as Mock).mockReturnValue({
@@ -224,7 +257,7 @@ describe('MainNav', () => {
     ;(useUpdateAppPinStatus as Mock).mockReturnValue({
       mutateAsync: mockUpdatePinStatus,
     })
-    ;(switchWorkspace as Mock).mockReturnValue(new Promise(() => {}))
+    mockSwitchWorkspace.mockReturnValue(new Promise(() => {}))
   })
 
   it('renders primary navigation with the planned routes', () => {
@@ -430,6 +463,20 @@ describe('MainNav', () => {
     expect(homeLink.className).toContain('bg-[linear-gradient(98.077deg')
   })
 
+  it('keeps Home active on the legacy explore apps route only', () => {
+    mockPathname = '/explore/apps'
+
+    const { rerender } = renderMainNav()
+
+    const homeLink = screen.getByRole('link', { name: /common.mainNav.home/ })
+    expect(homeLink).toHaveAttribute('aria-current', 'page')
+
+    mockPathname = '/installed/installed-1'
+    rerender(<JotaiProvider><MainNav /></JotaiProvider>)
+
+    expect(screen.getByRole('link', { name: /common.mainNav.home/ })).not.toHaveAttribute('aria-current')
+  })
+
   it('dispatches the goto anything open event from the search button', () => {
     const handleOpen = vi.fn()
     window.addEventListener(GOTO_ANYTHING_OPEN_EVENT, handleOpen)
@@ -484,16 +531,14 @@ describe('MainNav', () => {
     fireEvent.click(screen.getByRole('button', { name: 'common.mainNav.workspace.openMenu' }))
     fireEvent.click(await screen.findByText('Evan Workspace'))
     await waitFor(() => {
-      expect(switchWorkspace).toHaveBeenCalledWith({ url: '/workspaces/switch', body: { tenant_id: 'workspace-2' } })
+      expect(mockSwitchWorkspace).toHaveBeenCalledWith({ body: { tenant_id: 'workspace-2' } })
     })
   })
 
   it('shows the upgrade shortcut for sandbox workspaces', () => {
-    ;(useWorkspacesContext as Mock).mockReturnValue({
-      workspaces: [
-        { id: 'workspace-1', name: 'Solar Studio', plan: Plan.sandbox, status: 'normal', created_at: 0, current: true },
-      ],
-    })
+    mockWorkspaces = [
+      { id: 'workspace-1', name: 'Solar Studio', plan: Plan.sandbox, status: 'normal', created_at: 0, current: true },
+    ]
 
     renderMainNav()
 
@@ -573,7 +618,68 @@ describe('MainNav', () => {
 
     expect(screen.queryByText('Alpha App')).not.toBeInTheDocument()
     fireEvent.click(screen.getByText('Beta Tool'))
-    expect(mockPush).toHaveBeenCalledWith('/explore/installed/installed-2')
+    expect(mockPush).toHaveBeenCalledWith('/installed/installed-2')
+  })
+
+  it('renders web app skeleton rows while installed apps are loading', () => {
+    mockInstalledAppsPending = true
+
+    renderMainNav()
+
+    expect(screen.getByRole('region', { name: 'explore.sidebar.webApps' })).toHaveAttribute('aria-busy', 'true')
+    expect(screen.queryByText('common.loading')).not.toBeInTheDocument()
+    expect(screen.queryByText('Alpha App')).not.toBeInTheDocument()
+  })
+
+  it('separates pinned and unpinned installed web apps', () => {
+    mockInstalledApps = [
+      createInstalledApp({ id: 'installed-1', is_pinned: true, app: { ...createInstalledApp().app, name: 'Pinned App' } }),
+      createInstalledApp({ id: 'installed-2', is_pinned: false, app: { ...createInstalledApp().app, name: 'Unpinned App' } }),
+    ]
+
+    renderMainNav()
+
+    expect(screen.getByText('Pinned App')).toBeInTheDocument()
+    expect(screen.getByText('Unpinned App')).toBeInTheDocument()
+    expect(screen.getByTestId('divider')).toBeInTheDocument()
+  })
+
+  it('keeps long installed web app names truncated in the main nav item', () => {
+    const longName = 'A very long installed web app name that should stay on one line and truncate'
+    mockInstalledApps = [
+      createInstalledApp({ id: 'installed-1', app: { ...createInstalledApp().app, name: longName } }),
+    ]
+
+    renderMainNav()
+
+    expect(screen.getByText(longName)).toHaveClass('truncate')
+    expect(screen.getByTitle(longName)).toBeInTheDocument()
+  })
+
+  it('virtualizes large installed web app lists', async () => {
+    const offsetHeightSpy = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(320)
+    const offsetWidthSpy = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(240)
+    mockInstalledApps = Array.from({ length: 100 }, (_, index) => (
+      createInstalledApp({
+        id: `installed-${index}`,
+        app: {
+          ...createInstalledApp().app,
+          id: `app-${index}`,
+          name: `Web App ${index}`,
+        },
+      })
+    ))
+
+    try {
+      renderMainNav()
+
+      expect(await screen.findByText('Web App 0')).toBeInTheDocument()
+      expect(screen.queryByText('Web App 99')).not.toBeInTheDocument()
+    }
+    finally {
+      offsetHeightSpy.mockRestore()
+      offsetWidthSpy.mockRestore()
+    }
   })
 
   it('collapses and expands installed web apps from the section arrow', () => {
@@ -604,7 +710,7 @@ describe('MainNav', () => {
     renderMainNav()
 
     fireEvent.mouseEnter(screen.getByTitle('Alpha App'))
-    fireEvent.click(screen.getByTestId('item-operation-trigger'))
+    fireEvent.click(screen.getByRole('button', { name: 'common.operation.more' }))
     fireEvent.click(await screen.findByText('explore.sidebar.action.pin'))
 
     await waitFor(() => {
@@ -612,7 +718,7 @@ describe('MainNav', () => {
     })
 
     fireEvent.mouseEnter(screen.getByTitle('Alpha App'))
-    fireEvent.click(screen.getByTestId('item-operation-trigger'))
+    fireEvent.click(screen.getByRole('button', { name: 'common.operation.more' }))
     fireEvent.click(await screen.findByText('explore.sidebar.action.delete'))
     fireEvent.click(await screen.findByText('common.operation.confirm'))
 

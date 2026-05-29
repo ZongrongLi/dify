@@ -207,7 +207,8 @@ describe('PluginsPanel', () => {
       />,
     )
 
-    expect(screen.getByTestId('filter-management-wrap').parentElement).toHaveClass('sticky', 'top-0', 'z-10', 'h-12', 'py-2', 'max-w-[1600px]', 'px-6')
+    expect(screen.getByTestId('filter-management-wrap').parentElement).toHaveClass('h-12', 'py-2', 'max-w-[1600px]', 'px-6')
+    expect(screen.getByTestId('filter-management-wrap').parentElement).not.toHaveClass('sticky', 'top-0', 'z-10')
     expect(screen.getByTestId('filter-management-wrap').parentElement).toHaveClass('bg-components-panel-bg')
     expect(screen.getByText('update setting')).toBeInTheDocument()
   })
@@ -221,7 +222,8 @@ describe('PluginsPanel', () => {
       />,
     )
 
-    expect(screen.getByTestId('filter-management-wrap').parentElement).toHaveClass('sticky', 'top-0', 'z-10', 'h-12', 'py-2', 'max-w-[1600px]', 'px-6')
+    expect(screen.getByTestId('filter-management-wrap').parentElement).toHaveClass('h-12', 'py-2', 'max-w-[1600px]', 'px-6')
+    expect(screen.getByTestId('filter-management-wrap').parentElement).not.toHaveClass('sticky', 'top-0', 'z-10')
     expect(screen.getByTestId('filter-management-wrap').parentElement).toHaveClass('bg-components-panel-bg')
     expect(screen.getByTestId('filter-management')).toHaveAttribute('data-hide-category-filter', 'true')
     expect(screen.getByTestId('filter-management')).toHaveAttribute('data-hide-tag-filter', 'true')
@@ -244,7 +246,8 @@ describe('PluginsPanel', () => {
       />,
     )
 
-    expect(screen.getByTestId('filter-management-wrap').parentElement).toHaveClass('sticky', 'top-0', 'z-10', 'h-12', 'py-2', 'max-w-[1600px]', 'px-6')
+    expect(screen.getByTestId('filter-management-wrap').parentElement).toHaveClass('h-12', 'py-2', 'max-w-[1600px]', 'px-6')
+    expect(screen.getByTestId('filter-management-wrap').parentElement).not.toHaveClass('sticky', 'top-0', 'z-10')
     expect(screen.getByTestId('filter-management')).toHaveAttribute('data-hide-category-filter', 'true')
     expect(screen.getByTestId('filter-management')).toHaveAttribute('data-hide-tag-filter', 'true')
     expect(screen.getByText('update setting')).toBeInTheDocument()
@@ -270,6 +273,19 @@ describe('PluginsPanel', () => {
 
     expect(screen.getByTestId('plugin-list')).toHaveTextContent('search-extension')
     expect(screen.getByTestId('plugin-list')).toHaveTextContent('rag-extension')
+  })
+
+  it('leaves the result area blank when a fixed integrations category search has no matches', () => {
+    mockState.filters.searchQuery = 'missing'
+    mockPluginListWithLatestVersion.mockReturnValue([
+      createPlugin('trigger-plugin', 'Trigger Plugin', [], PluginCategoryEnum.trigger),
+      createPlugin('agent-plugin', 'Agent Plugin', [], PluginCategoryEnum.agent),
+    ])
+
+    render(<PluginsPanel contentInset="compact" fixedCategory={PluginCategoryEnum.trigger} />)
+
+    expect(screen.queryByTestId('plugin-list')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument()
   })
 
   it('filters the list and exposes the load-more action', () => {

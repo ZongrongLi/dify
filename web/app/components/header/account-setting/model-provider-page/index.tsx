@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type {
   ModelProvider,
 } from './declarations'
@@ -8,6 +9,7 @@ import { noop } from 'es-toolkit/function'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import SearchInput from '@/app/components/base/search-input'
+import { SkeletonContainer, SkeletonRectangle, SkeletonRow } from '@/app/components/base/skeleton'
 import { usePluginsWithLatestVersion } from '@/app/components/plugins/hooks'
 import { useCanSetPluginSettings } from '@/app/components/plugins/plugin-page/use-reference-setting'
 import { PluginCategoryEnum } from '@/app/components/plugins/types'
@@ -33,6 +35,7 @@ type SystemModelConfigStatus = 'no-provider' | 'none-configured' | 'partially-co
 
 type Props = {
   fixedWarningAlignment?: 'viewport' | 'content-frame'
+  layout?: (parts: { body: ReactNode, toolbar: ReactNode }) => ReactNode
   onSearchTextChange?: (value: string) => void
   searchText: string
   stickyToolbar?: boolean
@@ -41,8 +44,42 @@ type Props = {
 
 const FixedModelProvider = ['langgenius/openai/openai', 'langgenius/anthropic/anthropic']
 
+function ModelProviderCardSkeleton() {
+  return (
+    <div className="rounded-xl border-[0.5px] border-components-card-border bg-components-card-bg p-4 shadow-xs">
+      <SkeletonContainer className="h-24">
+        <SkeletonRow>
+          <SkeletonRectangle className="size-10 shrink-0 animate-pulse rounded-lg" />
+          <div className="flex flex-1 flex-col gap-1">
+            <SkeletonRectangle className="h-4 w-2/5 animate-pulse" />
+            <SkeletonRectangle className="h-3 w-1/4 animate-pulse" />
+          </div>
+          <SkeletonRectangle className="h-8 w-24 animate-pulse rounded-lg" />
+        </SkeletonRow>
+        <div className="mt-4 flex flex-col gap-2">
+          <SkeletonRectangle className="h-3 w-full animate-pulse" />
+          <SkeletonRectangle className="h-3 w-3/4 animate-pulse" />
+        </div>
+      </SkeletonContainer>
+    </div>
+  )
+}
+
+function ModelProviderListSkeleton() {
+  const { t } = useTranslation()
+
+  return (
+    <div role="status" aria-label={t('loading', { ns: 'common' })} className="space-y-2">
+      {Array.from({ length: 3 }, (_, index) => (
+        <ModelProviderCardSkeleton key={index} />
+      ))}
+    </div>
+  )
+}
+
 const ModelProviderPage = ({
   fixedWarningAlignment = 'viewport',
+  layout,
   onSearchTextChange,
   searchText,
   stickyToolbar,
@@ -59,7 +96,7 @@ const ModelProviderPage = ({
   const { data: rerankDefaultModel, isLoading: isRerankDefaultModelLoading } = useDefaultModel(ModelTypeEnum.rerank)
   const { data: speech2textDefaultModel, isLoading: isSpeech2textDefaultModelLoading } = useDefaultModel(ModelTypeEnum.speech2text)
   const { data: ttsDefaultModel, isLoading: isTTSDefaultModelLoading } = useDefaultModel(ModelTypeEnum.tts)
-  const { modelProviders: providers } = useProviderContext()
+  const { modelProviders: providers, isLoadingModelProviders } = useProviderContext()
   const { data: systemFeatures } = useSuspenseQuery(systemFeaturesQueryOptions())
 
   const allPluginIds = useMemo(() => {
@@ -130,7 +167,7 @@ const ModelProviderPage = ({
     = systemModelConfigStatus === 'no-provider' || systemModelConfigStatus === 'none-configured'
       ? 'modelProvider.noneConfigured'
       : null
-  const showWarning = !isDefaultModelLoading && !!warningTextKey
+  const showWarning = !isLoadingModelProviders && !isDefaultModelLoading && !!warningTextKey
 
   const [filteredConfiguredProviders, filteredNotConfiguredProviders] = useMemo(() => {
     const filteredConfiguredProviders = configuredProviders.filter(
@@ -144,38 +181,42 @@ const ModelProviderPage = ({
 
     return [filteredConfiguredProviders, filteredNotConfiguredProviders]
   }, [configuredProviders, debouncedSearchText, notConfiguredProviders])
-
-  return (
-    <div className="relative">
-      <div className={stickyToolbar
-        ? 'sticky top-0 z-10 -mx-6 mb-2 flex items-center justify-between gap-3 bg-components-panel-bg px-6 pb-2'
-        : 'mb-2 flex items-center justify-between gap-3'}
-      >
-        <SearchInput
-          className="w-[200px] shrink-0"
-          placeholder={t('modelProvider.searchModels', { ns: 'common' })}
-          value={searchText}
-          onChange={onSearchTextChange ?? noop}
-        />
-        <div className="flex shrink-0 items-center justify-end gap-2">
-          {canSetPermissions && (
-            <UpdateSettingPopover
-              category={PluginCategoryEnum.model}
-            />
-          )}
-          <SystemModelSelector
-            className="h-8 px-3 system-sm-medium"
-            notConfigured={showWarning}
-            textGenerationDefaultModel={textGenerationDefaultModel}
-            embeddingsDefaultModel={embeddingsDefaultModel}
-            rerankDefaultModel={rerankDefaultModel}
-            speech2textDefaultModel={speech2textDefaultModel}
-            ttsDefaultModel={ttsDefaultModel}
-            isLoading={isDefaultModelLoading}
-            hideProviderSettingsFooter={hideSystemModelSelectorProviderSettingsFooter}
+  const toolbar = (
+    <div className={stickyToolbar
+      ? layout
+        ? 'mb-2 flex items-center justify-between gap-3 bg-components-panel-bg pb-2'
+        : 'sticky top-0 z-10 -mx-6 mb-2 flex items-center justify-between gap-3 bg-components-panel-bg px-6 pb-2'
+      : 'mb-2 flex items-center justify-between gap-3'}
+    >
+      <SearchInput
+        className="w-50 shrink-0"
+        placeholder={t('modelProvider.searchModels', { ns: 'common' })}
+        value={searchText}
+        onChange={onSearchTextChange ?? noop}
+      />
+      <div className="flex shrink-0 items-center justify-end gap-2">
+        {canSetPermissions && (
+          <UpdateSettingPopover
+            category={PluginCategoryEnum.model}
           />
-        </div>
+        )}
+        <SystemModelSelector
+          className="h-8 px-3 system-sm-medium"
+          notConfigured={showWarning}
+          textGenerationDefaultModel={textGenerationDefaultModel}
+          embeddingsDefaultModel={embeddingsDefaultModel}
+          rerankDefaultModel={rerankDefaultModel}
+          speech2textDefaultModel={speech2textDefaultModel}
+          ttsDefaultModel={ttsDefaultModel}
+          isLoading={isDefaultModelLoading}
+          hideProviderSettingsFooter={hideSystemModelSelectorProviderSettingsFooter}
+        />
       </div>
+    </div>
+  )
+
+  const body = (
+    <>
       {showWarning && !warningDismissed && (
         <div className={fixedWarningAlignment === 'content-frame'
           ? 'pointer-events-none fixed top-2 right-0 left-[var(--model-provider-warning-left,0px)] z-50'
@@ -203,7 +244,8 @@ const ModelProviderPage = ({
         </div>
       )}
       {IS_CLOUD_EDITION && <QuotaPanel providers={providers} />}
-      {!filteredConfiguredProviders?.length && (
+      {isLoadingModelProviders && <ModelProviderListSkeleton />}
+      {!isLoadingModelProviders && !configuredProviders.length && (
         <div className="mb-2 rounded-[10px] bg-workflow-process-bg p-4">
           <div className="flex h-10 w-10 items-center justify-center rounded-[10px] border-[0.5px] border-components-card-border bg-components-card-bg shadow-lg backdrop-blur-sm">
             <span className="i-ri-brain-line size-5 text-text-primary" />
@@ -212,7 +254,7 @@ const ModelProviderPage = ({
           <div className="mt-1 system-xs-regular text-text-tertiary">{t('modelProvider.emptyProviderTip', { ns: 'common' })}</div>
         </div>
       )}
-      {!!filteredConfiguredProviders?.length && (
+      {!isLoadingModelProviders && !!filteredConfiguredProviders?.length && (
         <div className="relative">
           {filteredConfiguredProviders?.map(provider => (
             <ProviderAddedCard
@@ -223,7 +265,7 @@ const ModelProviderPage = ({
           ))}
         </div>
       )}
-      {!!filteredNotConfiguredProviders?.length && (
+      {!isLoadingModelProviders && !!filteredNotConfiguredProviders?.length && (
         <>
           <div className="mb-2 flex items-center pt-2 system-md-semibold text-text-primary">{t('modelProvider.toBeConfigured', { ns: 'common' })}</div>
           <div className="relative">
@@ -239,13 +281,23 @@ const ModelProviderPage = ({
         </>
       )}
       {
-        enableMarketplace && (
+        !isLoadingModelProviders && enableMarketplace && (
           <InstallFromMarketplace
             providers={providers}
             searchText={searchText}
           />
         )
       }
+    </>
+  )
+
+  if (layout)
+    return <div className="relative flex min-h-0 flex-1 flex-col">{layout({ body, toolbar })}</div>
+
+  return (
+    <div className="relative">
+      {toolbar}
+      {body}
     </div>
   )
 }

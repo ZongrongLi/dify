@@ -1,7 +1,40 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { AgentDetailPage } from '../pages/agent-detail-page'
 
 describe('AgentDetailPage', () => {
+  it('renders configurable memory settings', () => {
+    render(<AgentDetailPage section="configure" />)
+
+    expect(screen.getByRole('region', { name: 'agentV2.agentDetail.sections.configure' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'agentV2.agentDetail.memorySettings.title' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /agentV2\.agentDetail\.memorySettings\.strategies\.medium\.label/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /agentV2\.agentDetail\.memorySettings\.isolation\.perApp\.label/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /agentV2\.agentDetail\.memorySettings\.export\.download/ })).toBeInTheDocument()
+  })
+
+  it('switches memory strategy and isolation choices', () => {
+    render(<AgentDetailPage section="configure" />)
+
+    const economyStrategy = screen.getByRole('button', {
+      name: /agentV2\.agentDetail\.memorySettings\.strategies\.economy\.label/,
+    })
+    const perRunIsolation = screen.getByRole('button', {
+      name: /agentV2\.agentDetail\.memorySettings\.isolation\.perRun\.label/,
+    })
+
+    fireEvent.click(economyStrategy)
+    fireEvent.click(perRunIsolation)
+
+    expect(economyStrategy).toHaveAttribute('aria-pressed', 'true')
+    expect(perRunIsolation).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', {
+      name: /agentV2\.agentDetail\.memorySettings\.strategies\.medium\.label/,
+    })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', {
+      name: /agentV2\.agentDetail\.memorySettings\.isolation\.perApp\.label/,
+    })).toHaveAttribute('aria-pressed', 'false')
+  })
+
   it('renders the logs skeleton with filters and table rows', () => {
     render(<AgentDetailPage section="logs" />)
 

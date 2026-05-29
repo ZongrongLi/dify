@@ -11,9 +11,9 @@ import DatasetDetailSection from '@/app/components/app-sidebar/dataset-detail-se
 import DatasetDetailTop from '@/app/components/app-sidebar/dataset-detail-top'
 import DifyLogo from '@/app/components/base/logo/dify-logo'
 import EnvNav from '@/app/components/header/env-nav'
-import { buildIntegrationPath } from '@/app/components/tools/integration-routes'
+import { buildIntegrationPath } from '@/app/components/integrations/routes'
 import { useAppContext } from '@/context/app-context'
-import { AgentDetailSection, AgentDetailTop } from '@/features/agent-v2/navigation/agent-detail-navigation'
+import { AgentDetailSection, AgentDetailTop } from '@/features/agent-v2/agent-detail/navigation'
 import Link from '@/next/link'
 import { usePathname } from '@/next/navigation'
 import { systemFeaturesQueryOptions } from '@/service/system-features'
@@ -66,7 +66,7 @@ const MainNav = ({
           {
             href: '/',
             label: t('mainNav.home', { ns: 'common' }),
-            active: (path: string) => path === '/' || path.startsWith('/explore'),
+            active: (path: string) => path === '/' || path === '/explore/apps',
             icon: 'i-custom-vender-main-nav-home',
             activeIcon: 'i-custom-vender-main-nav-home-active',
           },
@@ -121,19 +121,21 @@ const MainNav = ({
     const appTitle = systemFeatures.branding.enabled && systemFeatures.branding.application_title ? systemFeatures.branding.application_title : 'Dify'
 
     return (
-      <h1 className="min-w-0">
-        <Link href="/" className="flex h-8 shrink-0 items-center overflow-hidden px-2">
-          {systemFeatures.branding.enabled && systemFeatures.branding.workspace_logo
-            ? (
-                <img
-                  src={systemFeatures.branding.workspace_logo}
-                  className="block h-5.5 w-auto object-contain"
-                  alt={appTitle}
-                />
-              )
-            : <DifyLogo alt={appTitle} />}
-        </Link>
-      </h1>
+      <Link
+        href="/"
+        className="flex h-8 shrink-0 items-center overflow-hidden px-2 focus-visible:ring-1 focus-visible:ring-components-input-border-active focus-visible:outline-hidden"
+        aria-label={appTitle}
+      >
+        {systemFeatures.branding.enabled && systemFeatures.branding.workspace_logo
+          ? (
+              <img
+                src={systemFeatures.branding.workspace_logo}
+                className="block h-5.5 w-auto object-contain"
+                alt=""
+              />
+            )
+          : <DifyLogo alt="" />}
+      </Link>
     )
   }
 

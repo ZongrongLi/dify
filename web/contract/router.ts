@@ -1,7 +1,7 @@
 import type { InferContractRouterInputs } from '@orpc/contract'
 import { contract as communityContract } from '@dify/contracts/api/console/orpc.gen'
 import { contract as enterpriseContract } from '@dify/contracts/enterprise/orpc.gen'
-import { accountAvatarContract } from './console/account'
+import { accountAvatarContract, accountProfileContract } from './console/account'
 import { appDeleteContract, appListContract, workflowOnlineUsersContract } from './console/apps'
 import { bindPartnerStackContract, invoicesContract } from './console/billing'
 import {
@@ -53,6 +53,7 @@ import {
   workflowDraftUpdateFeaturesContract,
 } from './console/workflow'
 import { workflowCommentContracts } from './console/workflow-comment'
+import { workspacesGetContract, workspaceSwitchContract } from './console/workspaces'
 import { collectionPluginsContract, collectionsContract, downloadPluginContract, searchAdvancedContract, templateDetailContract } from './marketplace'
 
 export const marketplaceRouterContract = {
@@ -76,6 +77,10 @@ export const consoleRouterContract = {
   account: {
     ...communityContract.account,
     avatar: accountAvatarContract,
+    profile: {
+      ...communityContract.account.profile,
+      get: accountProfileContract,
+    },
   },
   systemFeatures: systemFeaturesContract,
   apps: {
@@ -151,5 +156,11 @@ export const consoleRouterContract = {
     oauthConfigure: triggerOAuthConfigureContract,
     oauthDelete: triggerOAuthDeleteContract,
     oauthInitiate: triggerOAuthInitiateContract,
+  },
+  workspaces: {
+    get: workspacesGetContract,
+    switch: {
+      post: workspaceSwitchContract,
+    },
   },
 }

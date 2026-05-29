@@ -1,6 +1,5 @@
 'use client'
 
-import type { FC } from 'react'
 import type { AppListQuery } from '@/contract/console/apps'
 import { cn } from '@langgenius/dify-ui/cn'
 import { keepPreviousData, useInfiniteQuery, useSuspenseQuery } from '@tanstack/react-query'
@@ -11,13 +10,15 @@ import { NEED_REFRESH_APP_LIST_KEY } from '@/config'
 import { useAppContext } from '@/context/app-context'
 import { useProviderContext } from '@/context/provider-context'
 import { CheckModal } from '@/hooks/use-pay'
-import dynamic from '@/next/dynamic'
+import { usePathname, useRouter, useSearchParams } from '@/next/navigation'
 import { consoleQuery } from '@/service/client'
 import { systemFeaturesQueryOptions } from '@/service/system-features'
 import { AppModeEnum } from '@/types/app'
 import AppCard from './app-card'
 import { AppCardSkeleton } from './app-card-skeleton'
+import { AppListCreationModals } from './app-list-creation-modals'
 import AppListHeaderFilters from './app-list-header-filters'
+import { AppListTagManagementModal } from './app-list-tag-management-modal'
 import { APP_LIST_SEARCH_DEBOUNCE_MS } from './constants'
 import Empty from './empty'
 import FirstEmptyState from './first-empty-state'
@@ -27,38 +28,23 @@ import { useDSLDragDrop } from './hooks/use-dsl-drag-drop'
 import { useWorkflowOnlineUsers } from './hooks/use-workflow-online-users'
 import NewAppCard from './new-app-card'
 
-const TagManagementModal = dynamic(() => import('@/features/tag-management/components/tag-management-modal').then(mod => mod.TagManagementModal), {
-  ssr: false,
-})
-const CreateFromDSLModal = dynamic(() => import('@/app/components/app/create-from-dsl-modal'), {
-  ssr: false,
-})
-const CreateAppModal = dynamic(() => import('@/app/components/app/create-app-modal'), {
-  ssr: false,
-})
-const CreateAppTemplateDialog = dynamic(() => import('@/app/components/app/create-app-dialog'), {
-  ssr: false,
-})
-
-type Props = {
-  controlRefreshList?: number
-}
-const List: FC<Props> = ({
-  controlRefreshList = 0,
-}) => {
+function List({ controlRefreshList = 0 }: { controlRefreshList?: number }) {
   const { t } = useTranslation()
   const { data: systemFeatures } = useSuspenseQuery(systemFeaturesQueryOptions())
   const { isCurrentWorkspaceEditor, isCurrentWorkspaceDatasetOperator, isLoadingCurrentWorkspace } = useAppContext()
   const { onPlanInfoChanged } = useProviderContext()
+  const searchParams = useSearchParams()
+  const pathname = usePathname()
+  const { replace } = useRouter()
 
   // eslint-disable-next-line react/use-state -- custom URL query hook, not React.useState
   const {
-    query: { category, tagIDs, keywords, isCreatedByMe, emptyAppList },
+    query: { category, keywords, isCreatedByMe, emptyAppList },
     setCategory,
     setKeywords,
-    setTagIDs,
     setIsCreatedByMe,
   } = useAppsQueryState()
+  const [tagIDs, setTagIDs] = useState<string[]>([])
   const debouncedKeywords = useDebounce(keywords, { wait: APP_LIST_SEARCH_DEBOUNCE_MS })
   const newAppCardRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -78,6 +64,16 @@ const List: FC<Props> = ({
     containerRef,
     enabled: isCurrentWorkspaceEditor,
   })
+
+  useEffect(() => {
+    if (!searchParams.has('tagIDs'))
+      return
+
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete('tagIDs')
+    const query = params.toString()
+    replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
+  }, [pathname, replace, searchParams])
 
   const appListQuery = useMemo<AppListQuery>(() => ({
     page: 1,
@@ -141,9 +137,8 @@ const List: FC<Props> = ({
     }
 
     if (anchorRef.current && containerRef.current) {
-      // Calculate dynamic rootMargin: clamps to 100-200px range, using 20% of container height as the base value for better responsiveness
       const containerHeight = containerRef.current.clientHeight
-      const dynamicMargin = Math.max(100, Math.min(containerHeight * 0.2, 200)) // Clamps to 100-200px range, using 20% of container height as the base value
+      const dynamicMargin = Math.max(100, Math.min(containerHeight * 0.2, 200))
 
       observer = new IntersectionObserver((entries) => {
         if (entries[0]!.isIntersecting && !isLoading && !isFetchingNextPage && !error && hasMore)
@@ -151,7 +146,7 @@ const List: FC<Props> = ({
       }, {
         root: containerRef.current,
         rootMargin: `${dynamicMargin}px`,
-        threshold: 0.1, // Trigger when 10% of the anchor element is visible
+        threshold: 0.1,
       })
       observer.observe(anchorRef.current)
     }
@@ -196,7 +191,6 @@ const List: FC<Props> = ({
   const hasResolvedFirstPage = pages.length > 0
   const hasAnyApp = (pages[0]?.total ?? 0) > 0
   const hasActiveFilters = category !== 'all' || tagIDs.length > 0 || keywords.trim().length > 0 || debouncedKeywords.trim().length > 0 || isCreatedByMe
-  // Show skeleton during initial load or when refetching with no previous data
   const showSkeleton = !emptyAppList && (isLoading || (isFetching && pages.length === 0))
   const showFirstEmptyState = !showSkeleton && !hasAnyApp && isCurrentWorkspaceEditor && (emptyAppList || (hasResolvedFirstPage && !hasActiveFilters))
 
@@ -290,59 +284,26 @@ const List: FC<Props> = ({
         )}
         <CheckModal />
         <div ref={anchorRef} className="h-0"> </div>
-        <TagManagementModal
-          type="app"
+        <AppListTagManagementModal
           show={showTagManagementModal}
           onClose={() => setShowTagManagementModal(false)}
           onTagsChange={refetch}
         />
       </div>
 
-      {showCreateFromDSLModal && (
-        <CreateFromDSLModal
-          show={showCreateFromDSLModal}
-          onClose={() => {
-            setShowCreateFromDSLModal(false)
-            setDroppedDSLFile(undefined)
-          }}
-          onSuccess={() => {
-            setShowCreateFromDSLModal(false)
-            setDroppedDSLFile(undefined)
-            onPlanInfoChanged()
-            refetch()
-          }}
-          droppedFile={droppedDSLFile}
-        />
-      )}
-      {showNewAppModal && (
-        <CreateAppModal
-          show={showNewAppModal}
-          onClose={() => setShowNewAppModal(false)}
-          onSuccess={() => {
-            onPlanInfoChanged()
-            refetch()
-          }}
-          onCreateFromTemplate={() => {
-            setShowNewAppTemplateDialog(true)
-            setShowNewAppModal(false)
-          }}
-          defaultAppMode={category !== 'all' ? category : undefined}
-        />
-      )}
-      {showNewAppTemplateDialog && (
-        <CreateAppTemplateDialog
-          show={showNewAppTemplateDialog}
-          onClose={() => setShowNewAppTemplateDialog(false)}
-          onSuccess={() => {
-            onPlanInfoChanged()
-            refetch()
-          }}
-          onCreateFromBlank={() => {
-            setShowNewAppModal(true)
-            setShowNewAppTemplateDialog(false)
-          }}
-        />
-      )}
+      <AppListCreationModals
+        category={category}
+        droppedDSLFile={droppedDSLFile}
+        showCreateFromDSLModal={showCreateFromDSLModal}
+        showNewAppModal={showNewAppModal}
+        showNewAppTemplateDialog={showNewAppTemplateDialog}
+        onPlanInfoChanged={onPlanInfoChanged}
+        onRefetch={refetch}
+        onSetDroppedDSLFile={setDroppedDSLFile}
+        onSetShowCreateFromDSLModal={setShowCreateFromDSLModal}
+        onSetShowNewAppModal={setShowNewAppModal}
+        onSetShowNewAppTemplateDialog={setShowNewAppTemplateDialog}
+      />
     </>
   )
 }

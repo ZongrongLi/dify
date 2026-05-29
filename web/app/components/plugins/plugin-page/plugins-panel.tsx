@@ -5,10 +5,12 @@ import type { PluginPageContentInset } from './content-inset'
 import type { FilterState } from './filter-management'
 import { Button } from '@langgenius/dify-ui/button'
 import { cn } from '@langgenius/dify-ui/cn'
+import { ScrollArea } from '@langgenius/dify-ui/scroll-area'
 import { useDebounceFn } from 'ahooks'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import Loading from '@/app/components/base/loading'
+import { isSearchResultEmpty } from '@/app/components/base/search-input/search-state'
 import PluginDetailPanel from '@/app/components/plugins/plugin-detail-panel'
 import { useGetLanguage } from '@/context/i18n'
 import { renderI18nObject } from '@/i18n-config'
@@ -83,19 +85,32 @@ const PluginsPanel = ({
     setFilters(filters)
   }, { wait: 500 })
 
+  const categoryList = useMemo(() => {
+    if (!fixedCategory)
+      return pluginListWithLatestVersion
+
+    return pluginListWithLatestVersion.filter(plugin => plugin.declaration.category === fixedCategory)
+  }, [fixedCategory, pluginListWithLatestVersion])
+
   const filteredList = useMemo(() => {
     const { categories, searchQuery, tags } = filters
-    const effectiveCategories = fixedCategory ? [fixedCategory] : categories
     const shouldApplyTagFilter = !fixedCategory || isTriggerIntegrationPage
-    const filteredList = pluginListWithLatestVersion.filter((plugin) => {
+    const filteredList = categoryList.filter((plugin) => {
       return (
-        (effectiveCategories.length === 0 || effectiveCategories.includes(plugin.declaration.category))
+        (fixedCategory || categories.length === 0 || categories.includes(plugin.declaration.category))
         && (!shouldApplyTagFilter || tags.length === 0 || tags.some(tag => plugin.declaration.tags.includes(tag)))
         && matchesSearchQuery(plugin, searchQuery, locale)
       )
     })
     return filteredList
-  }, [fixedCategory, isTriggerIntegrationPage, pluginListWithLatestVersion, filters, locale])
+  }, [categoryList, fixedCategory, isTriggerIntegrationPage, filters, locale])
+  const isFilteringCategory = !!filters.searchQuery.trim() || (isTriggerIntegrationPage && filters.tags.length > 0)
+  const isIntegrationCategorySearchEmpty = isIntegrationCategoryPage && isSearchResultEmpty({
+    hasActiveFilter: isFilteringCategory,
+    isLoading: isPluginListLoading,
+    resultCount: filteredList.length,
+    sourceCount: categoryList.length,
+  })
 
   const currentPluginDetail = useMemo(() => {
     const detail = pluginListWithLatestVersion.find(plugin => plugin.plugin_id === currentPluginID)
@@ -115,12 +130,19 @@ const PluginsPanel = ({
       : isExtensionIntegrationPage
         ? 'integrationsExtension'
         : 'default'
+  const scrollAreaLabel = isTriggerIntegrationPage
+    ? t('categorySingle.trigger', { ns: 'plugin' })
+    : isAgentStrategyIntegrationPage
+      ? t('categorySingle.agent', { ns: 'plugin' })
+      : isExtensionIntegrationPage
+        ? t('categorySingle.extension', { ns: 'plugin' })
+        : undefined
 
   return (
     <>
       <div className={cn(
         isIntegrationCategoryPage
-          ? 'sticky top-0 z-10 flex h-12 shrink-0 items-center bg-components-panel-bg py-2'
+          ? 'flex h-12 shrink-0 items-center bg-components-panel-bg py-2'
           : 'sticky top-0 z-10 flex flex-col items-start justify-center gap-3 self-stretch bg-components-panel-bg pt-1 pb-3',
         contentFrameClassName,
       )}
@@ -138,18 +160,26 @@ const PluginsPanel = ({
         <>
           {(filteredList?.length ?? 0) > 0
             ? (
-                <div className={cn(
-                  'flex grow flex-wrap content-start items-start justify-center gap-2 self-stretch overflow-y-auto',
-                  'bg-components-panel-bg',
-                  isAgentStrategyIntegrationPage && 'pt-2',
-                  contentFrameClassName,
-                )}
+                <ScrollArea
+                  className={cn(
+                    'min-h-0 grow self-stretch overflow-hidden bg-components-panel-bg',
+                    contentFrameClassName,
+                  )}
+                  label={scrollAreaLabel}
+                  slotClassNames={{
+                    viewport: 'overscroll-contain',
+                    content: cn(
+                      'flex flex-wrap content-start items-start justify-center gap-2',
+                      isAgentStrategyIntegrationPage && 'pt-2',
+                    ),
+                    scrollbar: 'data-[orientation=vertical]:my-1 data-[orientation=vertical]:me-1',
+                  }}
                 >
                   <div className="w-full">
                     <List pluginList={filteredList || []} />
                   </div>
                   {!isLastPage && (
-                    <div className="flex justify-center py-4">
+                    <div className="flex w-full justify-center py-4">
                       {isFetching
                         ? <Loading className="size-8" />
                         : (
@@ -159,17 +189,21 @@ const PluginsPanel = ({
                           )}
                     </div>
                   )}
-                </div>
+                </ScrollArea>
               )
-            : (
-                <Empty
-                  canInstall={canInstall}
-                  contentInset={contentInset}
-                  onSwitchToMarketplace={onSwitchToMarketplace}
-                  installContextCategory={fixedCategory}
-                  variant={emptyVariant}
-                />
-              )}
+            : isIntegrationCategorySearchEmpty
+              ? (
+                  <div className={cn('min-h-0 grow bg-components-panel-bg', contentFrameClassName)} />
+                )
+              : (
+                  <Empty
+                    canInstall={canInstall}
+                    contentInset={contentInset}
+                    onSwitchToMarketplace={onSwitchToMarketplace}
+                    installContextCategory={fixedCategory}
+                    variant={emptyVariant}
+                  />
+                )}
         </>
       )}
       <PluginDetailPanel

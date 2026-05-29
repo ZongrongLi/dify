@@ -36,6 +36,7 @@ import { Trans, useTranslation } from 'react-i18next'
 import { AppTypeIcon } from '@/app/components/app/type-selector'
 import AppIcon from '@/app/components/base/app-icon'
 import { UserAvatarList } from '@/app/components/base/user-avatar-list'
+import { buildInstalledAppPath } from '@/app/components/explore/installed-app/routes'
 import { NEED_REFRESH_APP_LIST_KEY } from '@/config'
 import { useAppContext } from '@/context/app-context'
 import { useProviderContext } from '@/context/provider-context'
@@ -79,12 +80,12 @@ const ACCESS_MODE_ICON_CLASS_NAMES: Record<AccessMode, string> = {
   [AccessMode.EXTERNAL_MEMBERS]: 'i-ri-verified-badge-line',
 }
 
-const ACCESS_MODE_LABEL_KEYS: Record<AccessMode, string> = {
+const ACCESS_MODE_LABEL_KEYS = {
   [AccessMode.PUBLIC]: 'accessItemsDescription.anyone',
   [AccessMode.SPECIFIC_GROUPS_MEMBERS]: 'accessItemsDescription.specific',
   [AccessMode.ORGANIZATION]: 'accessItemsDescription.organization',
   [AccessMode.EXTERNAL_MEMBERS]: 'accessItemsDescription.external',
-}
+} as const
 
 type AppCardProps = {
   app: App
@@ -165,7 +166,7 @@ const AppCardOperationsMenu: React.FC<AppCardOperationsMenuProps> = ({
       await openAsyncWindow(async () => {
         const { installed_apps } = await fetchInstalledAppList(app.id)
         if (installed_apps?.length > 0)
-          return `${basePath}/explore/installed/${installed_apps[0]!.id}`
+          return `${basePath}${buildInstalledAppPath(installed_apps[0]!.id)}`
         throw new Error('No app found in Explore')
       }, {
         onError: (err) => {
