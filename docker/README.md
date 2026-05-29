@@ -165,7 +165,7 @@ Before synchronization, the current `.env` file is saved to the `env-backup/` di
 # Grant execution permission (first time only)
 chmod +x dify-env-sync.sh
 
-# Run the synchronization
+# Run synchronization
 ./dify-env-sync.sh
 ```
 
