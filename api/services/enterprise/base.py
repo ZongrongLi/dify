@@ -39,6 +39,7 @@ class MCPIdentityRefreshError(MCPTokenError):
     def __init__(self, description: str = ""):
         super().__init__(description, status_code=401)
 
+
 logger = logging.getLogger(__name__)
 
 

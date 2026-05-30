@@ -59,9 +59,7 @@ class ToolProviderApiEntity(BaseModel):
     forward_user_identity: bool = Field(
         default=False, description="Whether Dify forwards the calling user's SSO identity to this MCP server"
     )
-    identity_mode: str = Field(
-        default="off", description="Identity-forwarding mechanism: 'off' or 'idp_token'"
-    )
+    identity_mode: str = Field(default="off", description="Identity-forwarding mechanism: 'off' or 'idp_token'")
     # Workflow
     workflow_app_id: str | None = Field(default=None, description="The app id of the workflow tool")
 

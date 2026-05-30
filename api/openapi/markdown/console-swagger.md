@@ -13761,10 +13761,12 @@ Enum class for large language model mode.
 | ---- | ---- | ----------- | -------- |
 | authentication | object |  | No |
 | configuration | object |  | No |
+| forward_user_identity | boolean |  | No |
 | headers | object |  | No |
 | icon | string |  | Yes |
 | icon_background | string |  | No |
 | icon_type | string |  | Yes |
+| identity_mode | string | *Enum:* `"idp_token"`, `"off"` | No |
 | name | string |  | Yes |
 | server_identifier | string |  | Yes |
 | server_url | string |  | Yes |
@@ -13781,10 +13783,12 @@ Enum class for large language model mode.
 | ---- | ---- | ----------- | -------- |
 | authentication | object |  | No |
 | configuration | object |  | No |
+| forward_user_identity | boolean |  | No |
 | headers | object |  | No |
 | icon | string |  | Yes |
 | icon_background | string |  | No |
 | icon_type | string |  | Yes |
+| identity_mode | string | *Enum:* `"idp_token"`, `"off"` | No |
 | name | string |  | Yes |
 | provider_id | string |  | Yes |
 | server_identifier | string |  | Yes |
