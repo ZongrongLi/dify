@@ -40,6 +40,7 @@ class MCPClientWithAuthRetry(MCPClient):
         provider_entity: MCPProviderEntity | None = None,
         authorization_code: str | None = None,
         by_server_id: bool = False,
+        forward_identity_active: bool = False,
     ):
         """
         Initialize the MCP client with auth retry capability.
@@ -52,12 +53,18 @@ class MCPClientWithAuthRetry(MCPClient):
             provider_entity: Provider entity for authentication
             authorization_code: Optional authorization code for initial auth
             by_server_id: Whether to look up provider by server ID
+            forward_identity_active: True when the request already carries a
+                forwarded end-user identity token. In that case a 401 from the
+                MCP server is a forwarded-identity failure (bad audience,
+                untrusted issuer, etc.) and we MUST surface it instead of
+                silently downgrading to the provider's static OAuth identity.
         """
         super().__init__(server_url, headers, timeout, sse_read_timeout)
 
         self.provider_entity = provider_entity
         self.authorization_code = authorization_code
         self.by_server_id = by_server_id
+        self.forward_identity_active = forward_identity_active
         self._has_retried = False
 
     def _handle_auth_error(self, error: MCPAuthError) -> None:
@@ -73,6 +80,12 @@ class MCPClientWithAuthRetry(MCPClient):
         Raises:
             MCPAuthError: If authentication fails or max retries reached
         """
+        # When the caller has stamped a forwarded end-user identity on the
+        # request, never run the static-OAuth retry — that would silently
+        # replace the user identity with Dify's static client identity and
+        # the MCP server would (incorrectly) appear to "succeed" as Dify.
+        if self.forward_identity_active:
+            raise error
         if not self.provider_entity:
             raise error
         if self._has_retried:

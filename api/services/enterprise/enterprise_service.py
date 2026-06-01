@@ -18,8 +18,7 @@ from services.enterprise.base import (
     MCPTokenError,
 )
 from services.errors.enterprise import (
-    EnterpriseAPIError,
-    EnterpriseAPIUnauthorizedError,
+    EnterpriseServiceError,
 )
 
 if TYPE_CHECKING:
@@ -166,25 +165,40 @@ class EnterpriseService:
                     "audience": audience,
                 },
             )
-        except EnterpriseAPIUnauthorizedError as e:
-            # Enterprise side returns 401 when the IdP rejected the refresh.
-            raise MCPIdentityRefreshError(str(e) or "identity refresh failed; please re-authenticate") from e
-        except EnterpriseAPIError as e:
-            # Map the 428 PreconditionRequired we emit on no-stored-refresh-token.
-            if getattr(e, "status_code", None) == 428:
+        except EnterpriseServiceError as e:
+            # The HTTP-status subclasses (400/401/403/404) inherit directly
+            # from EnterpriseServiceError, not EnterpriseAPIError, so we
+            # must catch the base class to route them all.
+            status = getattr(e, "status_code", None)
+            if status == 401:
+                # Enterprise side returns 401 when the IdP rejected the refresh.
+                raise MCPIdentityRefreshError(str(e) or "identity refresh failed; please re-authenticate") from e
+            if status == 428:
                 raise MCPNoRefreshTokenError(
                     str(e) or "user has no stored SSO refresh token; please re-authenticate"
                 ) from e
-            raise MCPTokenError(f"issue_mcp_token failed: {e}") from e
+            if status == 403:
+                # 403 most often means the tenant isn't licensed for MCP
+                # identity-forwarding. Surface as identity-refresh-failure so
+                # the workflow halts loudly rather than retrying.
+                raise MCPIdentityRefreshError(
+                    str(e) or "enterprise refused to issue an MCP identity token (license or policy)"
+                ) from e
+            raise MCPTokenError(f"issue_mcp_token failed (status={status}): {e}") from e
 
         if not isinstance(response, dict):
             raise MCPTokenError("invalid response shape from enterprise /mcp/issue-token")
 
         token = response.get("token")
         expires_at = response.get("expires_at")
-        if not token or not isinstance(token, str) or not isinstance(expires_at, int):
-            raise MCPTokenError(f"missing token/expires_at in enterprise response: {response}")
-        return token, expires_at
+        # Accept int or float for expires_at (some clocks emit float
+        # seconds-since-epoch). Reject bools explicitly because `bool` is
+        # an `int` subclass in Python and would pass isinstance(_, int).
+        if not isinstance(token, str) or not token:
+            raise MCPTokenError(f"missing or non-string token in enterprise response: {response!r}")
+        if isinstance(expires_at, bool) or not isinstance(expires_at, (int, float)):
+            raise MCPTokenError(f"missing or non-numeric expires_at in enterprise response: {response!r}")
+        return token, int(expires_at)
 
     @classmethod
     def initiate_device_flow_sso(cls, signed_state: str) -> dict:

@@ -209,11 +209,13 @@ class MCPProviderBasePayload(BaseModel):
     configuration: dict[str, Any] | None = Field(default_factory=dict)
     headers: dict[str, Any] | None = Field(default_factory=dict)
     authentication: dict[str, Any] | None = Field(default_factory=dict)
-    # M3 — user-identity forwarding (M2 backend already supports these on the
-    # service layer). Defaults preserve pre-M3 behavior for clients that don't
-    # send the fields yet.
-    forward_user_identity: bool = False
-    identity_mode: Literal["off", "idp_token"] = "off"
+    # M3 — user-identity forwarding (M2 backend supports these on the service
+    # layer). `None` means "leave unchanged" — matches the service-layer
+    # contract for update_provider, so a PATCH that omits these fields will
+    # NOT reset an already-on toggle. The create path defaults `None` to
+    # `False`/"off" at the call site below.
+    forward_user_identity: bool | None = None
+    identity_mode: Literal["off", "idp_token"] | None = None
 
 
 class MCPProviderCreatePayload(MCPProviderBasePayload):
@@ -990,8 +992,9 @@ class ToolProviderMCPApi(Resource):
                 headers=payload.headers or {},
                 configuration=configuration,
                 authentication=authentication,
-                forward_user_identity=payload.forward_user_identity,
-                identity_mode=payload.identity_mode,
+                # Create path: None → safe pre-M3 defaults.
+                forward_user_identity=payload.forward_user_identity or False,
+                identity_mode=payload.identity_mode or "off",
             )
 
         # 2) Try to fetch tools immediately after creation so they appear without a second save.

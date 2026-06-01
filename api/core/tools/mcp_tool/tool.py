@@ -287,8 +287,19 @@ class MCPTool(Tool):
         # the MCP server's URL per RFC 8707) and stamp it as Authorization.
         # This OVERRIDES any Authorization already on the request — the
         # forwarded identity is what the MCP server should trust.
-        if self.forward_user_identity and self.identity_mode == "idp_token" and user_id:
+        forward_identity_active = False
+        if self.forward_user_identity and self.identity_mode == "idp_token":
+            if not user_id:
+                # Fail closed: a security feature should never silently
+                # invoke as the provider's static identity when the caller
+                # forgot (or couldn't supply) user context.
+                raise ToolInvokeError(
+                    "Forward-user-identity is enabled for this MCP provider but no end-user "
+                    "context was supplied. Cannot invoke as the static provider identity — "
+                    "this would defeat the per-user authorization the workflow expects."
+                )
             self._inject_forwarded_identity(headers, user_id=user_id, app_id=app_id, audience=server_url)
+            forward_identity_active = True
 
         # Step 2: Session is now closed, perform network operations without holding database connection
         # MCPClientWithAuthRetry will create a new session lazily only if auth retry is needed
@@ -299,6 +310,7 @@ class MCPTool(Tool):
                 timeout=self.timeout,
                 sse_read_timeout=self.sse_read_timeout,
                 provider_entity=provider_entity,
+                forward_identity_active=forward_identity_active,
             ) as mcp_client:
                 return mcp_client.invoke_tool(tool_name=self.entity.identity.name, tool_args=tool_parameters)
         except MCPConnectionError as e:
