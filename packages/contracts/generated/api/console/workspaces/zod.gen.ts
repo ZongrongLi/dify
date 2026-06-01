@@ -670,12 +670,7 @@ export const zBuiltinToolAddPayload = z.object({
 /**
  * IdentityMode
  *
- * How Dify forwards the calling end-user's identity to an MCP server.
- *
- * Adding a new mechanism (e.g. RFC 8693 token exchange) is a one-line
- * addition here — every downstream layer accepts this enum, so we don't
- * need to touch the model, controller payload, service, runtime, and
- * Pydantic boundary individually.
+ * How Dify forwards the end-user's identity to an MCP server.
  */
 export const zIdentityMode = z.enum(['idp_token', 'off'])
 

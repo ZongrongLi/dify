@@ -262,8 +262,7 @@ class MCPTool(Tool):
         # Fail closed: forwarding requires user_id (refuse before any DB I/O).
         if self.forward_user_identity and self.identity_mode == IdentityMode.IDP_TOKEN and not user_id:
             raise ToolInvokeError(
-                "Forward-user-identity is enabled for this MCP provider but no "
-                "end-user context was supplied."
+                "Forward-user-identity is enabled for this MCP provider but no end-user context was supplied."
             )
 
         headers = self.headers.copy() if self.headers else {}
