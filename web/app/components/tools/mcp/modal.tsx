@@ -75,10 +75,6 @@ const MCPModalContent: FC<MCPModalContentProps> = ({
     actions,
   } = useMCPModalForm(data)
 
-  // Capability gate for the Forward-user-identity toggle. Without SSO
-  // configured on this workspace, the M2 backend will 428 because no SSO
-  // refresh token has ever been stored — so disable the switch and surface
-  // why instead of letting the user flip it on for no effect.
   const { data: systemFeatures } = useSuspenseQuery(systemFeaturesQueryOptions())
   const isForwardIdentitySupported = systemFeatures.sso_enforced_for_signin
 
@@ -122,8 +118,7 @@ const MCPModalContent: FC<MCPModalContentProps> = ({
         timeout: state.timeout || 30,
         sse_read_timeout: state.sseReadTimeout || 300,
       },
-      // If SSO isn't configured we never send `true` — that would trip the
-      // backend 428 even though the UI didn't allow flipping it on.
+      // Edit-mode data may carry true; clamp when SSO is no longer available.
       forward_user_identity: state.forwardUserIdentity && isForwardIdentitySupported,
       identity_mode: state.forwardUserIdentity && isForwardIdentitySupported ? 'idp_token' : 'off',
     })
