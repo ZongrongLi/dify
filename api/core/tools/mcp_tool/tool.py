@@ -258,6 +258,16 @@ class MCPTool(Tool):
         user_id: str | None = None,
         app_id: str | None = None,
     ) -> CallToolResult:
+        # Fail closed BEFORE any DB session is opened: a security feature must
+        # never silently invoke as the provider's static identity when the
+        # caller forgot (or couldn't supply) user context.
+        if self.forward_user_identity and self.identity_mode == "idp_token" and not user_id:
+            raise ToolInvokeError(
+                "Forward-user-identity is enabled for this MCP provider but no end-user "
+                "context was supplied. Cannot invoke as the static provider identity — "
+                "this would defeat the per-user authorization the workflow expects."
+            )
+
         headers = self.headers.copy() if self.headers else {}
         tool_parameters = self._handle_none_parameter(tool_parameters)
 
@@ -286,18 +296,12 @@ class MCPTool(Tool):
         # enterprise side to mint a fresh SSO id_token (audience-scoped to
         # the MCP server's URL per RFC 8707) and stamp it as Authorization.
         # This OVERRIDES any Authorization already on the request — the
-        # forwarded identity is what the MCP server should trust.
+        # forwarded identity is what the MCP server should trust. The
+        # missing-user_id guard already ran above (fail-closed) so here we
+        # know user_id is non-empty.
         forward_identity_active = False
         if self.forward_user_identity and self.identity_mode == "idp_token":
-            if not user_id:
-                # Fail closed: a security feature should never silently
-                # invoke as the provider's static identity when the caller
-                # forgot (or couldn't supply) user context.
-                raise ToolInvokeError(
-                    "Forward-user-identity is enabled for this MCP provider but no end-user "
-                    "context was supplied. Cannot invoke as the static provider identity — "
-                    "this would defeat the per-user authorization the workflow expects."
-                )
+            assert user_id  # narrowed by the fail-closed check above
             self._inject_forwarded_identity(headers, user_id=user_id, app_id=app_id, audience=server_url)
             forward_identity_active = True
 

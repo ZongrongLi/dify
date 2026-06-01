@@ -148,3 +148,93 @@ def test_mcp_tool_handle_none_parameter_filters_empty_values():
     tool = _build_mcp_tool()
     cleaned = tool._handle_none_parameter({"a": 1, "b": None, "c": "", "d": "  ", "e": "ok"})
     assert cleaned == {"a": 1, "e": "ok"}
+
+
+# ----- M2/M3 user-identity forwarding ---------------------------------------
+
+
+def _build_forwarding_tool(*, forward: bool = True, mode: str = "idp_token") -> MCPTool:
+    """Helper that builds an MCPTool with forwarding flags set."""
+    entity = ToolEntity(
+        identity=ToolIdentity(
+            author="author",
+            name="remote-tool",
+            label=I18nObject(en_US="remote-tool"),
+            provider="provider-id",
+        ),
+        parameters=[],
+        output_schema={},
+    )
+    return MCPTool(
+        entity=entity,
+        runtime=ToolRuntime(tenant_id="tenant-1", invoke_from=InvokeFrom.DEBUGGER),
+        tenant_id="tenant-1",
+        icon="icon.svg",
+        server_url="https://mcp.example.com/mcp/",
+        provider_id="provider-id",
+        forward_user_identity=forward,
+        identity_mode=mode,
+    )
+
+
+def test_inject_forwarded_identity_stamps_bearer_header():
+    """When _inject_forwarded_identity runs, it must put the minted token in
+    `Authorization: Bearer <token>`, overwriting whatever was there."""
+    tool = _build_forwarding_tool()
+    headers: dict[str, str] = {"Authorization": "Bearer static-client-token", "X-Other": "keep"}
+
+    with patch(
+        "services.enterprise.enterprise_service.EnterpriseService.issue_mcp_token",
+        return_value=("forwarded.jwt.payload", 1900000000),
+    ):
+        tool._inject_forwarded_identity(
+            headers, user_id="alice", app_id=None, audience="https://mcp.example.com/mcp/"
+        )
+
+    # Forwarded token wins; non-Authorization headers preserved.
+    assert headers["Authorization"] == "Bearer forwarded.jwt.payload"
+    assert headers["X-Other"] == "keep"
+
+
+def test_inject_forwarded_identity_translates_token_error_to_invoke_error():
+    """EnterpriseService failures must surface as ToolInvokeError so the
+    workflow halts loudly instead of proceeding without identity."""
+    from services.enterprise.base import MCPNoRefreshTokenError
+
+    tool = _build_forwarding_tool()
+    headers: dict[str, str] = {}
+
+    with patch(
+        "services.enterprise.enterprise_service.EnterpriseService.issue_mcp_token",
+        side_effect=MCPNoRefreshTokenError("please re-sso"),
+    ):
+        with pytest.raises(ToolInvokeError, match="forwarded identity token"):
+            tool._inject_forwarded_identity(
+                headers, user_id="alice", app_id=None, audience="https://mcp.example.com/mcp/"
+            )
+
+    # Headers must NOT have been mutated when token-issuance failed.
+    assert "Authorization" not in headers
+
+
+def test_invoke_remote_mcp_tool_fails_closed_when_user_id_missing():
+    """A security feature must never silently invoke as the static identity
+    when forwarding is enabled but no user context was supplied."""
+    tool = _build_forwarding_tool()
+
+    with pytest.raises(ToolInvokeError, match="no end-user context"):
+        tool.invoke_remote_mcp_tool({}, user_id=None, app_id=None)
+
+
+def test_forwarding_inactive_tool_keeps_legacy_construction():
+    """When forwarding is off, MCPTool still constructs cleanly and exposes
+    the flag values truthfully. (The full no-injection path is covered by
+    integration tests; here we just lock in the construction contract.)"""
+    tool = _build_forwarding_tool(forward=False, mode="off")
+    assert tool.forward_user_identity is False
+    assert tool.identity_mode == "off"
+
+    # fork_tool_runtime must preserve the (off, off) state.
+    forked = tool.fork_tool_runtime(ToolRuntime(tenant_id="tenant-2"))
+    assert forked.forward_user_identity is False
+    assert forked.identity_mode == "off"
