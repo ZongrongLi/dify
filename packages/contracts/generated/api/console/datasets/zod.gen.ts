@@ -636,13 +636,6 @@ export const zHitTestingQuery = z.object({
 })
 
 /**
- * HitTestingQuery
- */
-export const zHitTestingQuery = z.object({
-  content: z.string(),
-})
-
-/**
  * DatasetMetadataListItemResponse
  */
 export const zDatasetMetadataListItemResponse = z.object({
