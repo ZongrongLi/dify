@@ -1,6 +1,6 @@
-from typing import Any, Literal, Self
+from typing import Any, Self
 
-from core.entities.mcp_provider import MCPProviderEntity
+from core.entities.mcp_provider import IdentityMode, MCPProviderEntity
 from core.mcp.types import Tool as RemoteMCPTool
 from core.tools.__base.tool_provider import ToolProviderController
 from core.tools.__base.tool_runtime import ToolRuntime
@@ -29,7 +29,7 @@ class MCPToolProviderController(ToolProviderController):
         timeout: float | None = None,
         sse_read_timeout: float | None = None,
         forward_user_identity: bool = False,
-        identity_mode: Literal["off", "idp_token"] = "off",
+        identity_mode: IdentityMode = IdentityMode.OFF,
     ):
         super().__init__(entity)
         self.entity: ToolProviderEntityWithPlugin = entity
@@ -40,7 +40,7 @@ class MCPToolProviderController(ToolProviderController):
         self.timeout = timeout
         self.sse_read_timeout = sse_read_timeout
         self.forward_user_identity = forward_user_identity
-        self.identity_mode: Literal["off", "idp_token"] = identity_mode
+        self.identity_mode: IdentityMode = identity_mode
 
     @property
     def provider_type(self) -> ToolProviderType:

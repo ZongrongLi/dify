@@ -4,7 +4,7 @@ import logging
 from collections.abc import Mapping
 from datetime import datetime
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Any
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
@@ -12,7 +12,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from core.entities.mcp_provider import MCPAuthentication, MCPConfiguration, MCPProviderEntity
+from core.entities.mcp_provider import IdentityMode, MCPAuthentication, MCPConfiguration, MCPProviderEntity
 from core.helper import encrypter
 from core.helper.provider_cache import NoOpProviderCredentialCache
 from core.mcp.auth.auth_flow import auth
@@ -137,7 +137,7 @@ class MCPToolManageService:
         authentication: MCPAuthentication | None = None,
         headers: dict[str, str] | None = None,
         forward_user_identity: bool = False,
-        identity_mode: Literal["off", "idp_token"] = "off",
+        identity_mode: IdentityMode = IdentityMode.OFF,
     ) -> ToolProviderApiEntity:
         """Create a new MCP provider."""
         # Validate URL format
@@ -199,7 +199,7 @@ class MCPToolManageService:
         authentication: MCPAuthentication | None = None,
         validation_result: ServerUrlValidationResult | None = None,
         forward_user_identity: bool | None = None,
-        identity_mode: Literal["off", "idp_token"] | None = None,
+        identity_mode: IdentityMode | None = None,
     ) -> None:
         """
         Update an MCP provider.

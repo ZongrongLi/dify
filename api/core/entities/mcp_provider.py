@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from pydantic import BaseModel
@@ -35,6 +35,19 @@ class MCPSupportGrantType(StrEnum):
     AUTHORIZATION_CODE = "authorization_code"
     CLIENT_CREDENTIALS = "client_credentials"
     REFRESH_TOKEN = "refresh_token"
+
+
+class IdentityMode(StrEnum):
+    """How Dify forwards the calling end-user's identity to an MCP server.
+
+    Adding a new mechanism (e.g. RFC 8693 token exchange) is a one-line
+    addition here — every downstream layer accepts this enum, so we don't
+    need to touch the model, controller payload, service, runtime, and
+    Pydantic boundary individually.
+    """
+
+    OFF = "off"
+    IDP_TOKEN = "idp_token"
 
 
 class MCPAuthentication(BaseModel):
@@ -82,7 +95,7 @@ class MCPProviderEntity(BaseModel):
     # outbound MCP request as `Authorization: Bearer <token>`. Defaults keep
     # pre-M2 providers unchanged (no forwarding).
     forward_user_identity: bool = False
-    identity_mode: Literal["off", "idp_token"] = "off"
+    identity_mode: IdentityMode = IdentityMode.OFF
 
     @classmethod
     def from_db_model(cls, db_provider: MCPToolProvider) -> MCPProviderEntity:
@@ -105,7 +118,10 @@ class MCPProviderEntity(BaseModel):
             created_at=db_provider.created_at,
             updated_at=db_provider.updated_at,
             forward_user_identity=db_provider.forward_user_identity,
-            identity_mode=db_provider.identity_mode,  # type: ignore[arg-type]
+            # DB column is varchar(32). Coerce through the StrEnum so an
+            # unrecognized future value would raise here rather than silently
+            # propagate as a bare string into the runtime.
+            identity_mode=IdentityMode(db_provider.identity_mode),
         )
 
     @property

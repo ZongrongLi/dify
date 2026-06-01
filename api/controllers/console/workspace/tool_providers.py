@@ -20,7 +20,7 @@ from controllers.console.wraps import (
     setup_required,
 )
 from core.db.session_factory import session_factory
-from core.entities.mcp_provider import MCPAuthentication, MCPConfiguration
+from core.entities.mcp_provider import IdentityMode, MCPAuthentication, MCPConfiguration
 from core.mcp.auth.auth_flow import auth, handle_callback
 from core.mcp.error import MCPAuthError, MCPError, MCPRefreshTokenError
 from core.mcp.mcp_client import MCPClient
@@ -213,9 +213,13 @@ class MCPProviderBasePayload(BaseModel):
     # layer). `None` means "leave unchanged" — matches the service-layer
     # contract for update_provider, so a PATCH that omits these fields will
     # NOT reset an already-on toggle. The create path defaults `None` to
-    # `False`/"off" at the call site below.
+    # `False` / IdentityMode.OFF at the call site below.
+    #
+    # Pydantic validates against the IdentityMode enum, so adding a future
+    # mode (e.g. "token_exchange") is a single-line addition to the enum —
+    # the API boundary picks it up automatically.
     forward_user_identity: bool | None = None
-    identity_mode: Literal["off", "idp_token"] | None = None
+    identity_mode: IdentityMode | None = None
 
 
 class MCPProviderCreatePayload(MCPProviderBasePayload):
@@ -994,7 +998,7 @@ class ToolProviderMCPApi(Resource):
                 authentication=authentication,
                 # Create path: None → safe pre-M3 defaults.
                 forward_user_identity=payload.forward_user_identity or False,
-                identity_mode=payload.identity_mode or "off",
+                identity_mode=payload.identity_mode or IdentityMode.OFF,
             )
 
         # 2) Try to fetch tools immediately after creation so they appear without a second save.

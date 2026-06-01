@@ -4,8 +4,9 @@ import base64
 import json
 import logging
 from collections.abc import Generator, Mapping
-from typing import Any, Literal, cast
+from typing import Any, cast
 
+from core.entities.mcp_provider import IdentityMode
 from core.mcp.auth_client import MCPClientWithAuthRetry
 from core.mcp.error import MCPConnectionError
 from core.mcp.types import (
@@ -39,7 +40,7 @@ class MCPTool(Tool):
         timeout: float | None = None,
         sse_read_timeout: float | None = None,
         forward_user_identity: bool = False,
-        identity_mode: Literal["off", "idp_token"] = "off",
+        identity_mode: IdentityMode = IdentityMode.OFF,
     ):
         super().__init__(entity, runtime)
         self.tenant_id = tenant_id
@@ -50,7 +51,7 @@ class MCPTool(Tool):
         self.timeout = timeout
         self.sse_read_timeout = sse_read_timeout
         self.forward_user_identity = forward_user_identity
-        self.identity_mode: Literal["off", "idp_token"] = identity_mode
+        self.identity_mode: IdentityMode = identity_mode
         self._latest_usage = LLMUsage.empty_usage()
 
     def tool_provider_type(self) -> ToolProviderType:
@@ -261,7 +262,7 @@ class MCPTool(Tool):
         # Fail closed BEFORE any DB session is opened: a security feature must
         # never silently invoke as the provider's static identity when the
         # caller forgot (or couldn't supply) user context.
-        if self.forward_user_identity and self.identity_mode == "idp_token" and not user_id:
+        if self.forward_user_identity and self.identity_mode == IdentityMode.IDP_TOKEN and not user_id:
             raise ToolInvokeError(
                 "Forward-user-identity is enabled for this MCP provider but no end-user "
                 "context was supplied. Cannot invoke as the static provider identity — "
@@ -300,7 +301,7 @@ class MCPTool(Tool):
         # missing-user_id guard already ran above (fail-closed) so here we
         # know user_id is non-empty.
         forward_identity_active = False
-        if self.forward_user_identity and self.identity_mode == "idp_token":
+        if self.forward_user_identity and self.identity_mode == IdentityMode.IDP_TOKEN:
             assert user_id  # narrowed by the fail-closed check above
             self._inject_forwarded_identity(headers, user_id=user_id, app_id=app_id, audience=server_url)
             forward_identity_active = True
