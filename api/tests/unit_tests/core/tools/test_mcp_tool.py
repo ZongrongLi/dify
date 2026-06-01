@@ -187,9 +187,7 @@ def test_inject_forwarded_identity_stamps_bearer_header():
         "services.enterprise.enterprise_service.EnterpriseService.issue_mcp_token",
         return_value=("forwarded.jwt.payload", 1900000000),
     ):
-        tool._inject_forwarded_identity(
-            headers, user_id="alice", app_id=None, audience="https://mcp.example.com/mcp/"
-        )
+        tool._inject_forwarded_identity(headers, user_id="alice", app_id=None, audience="https://mcp.example.com/mcp/")
 
     # Forwarded token wins; non-Authorization headers preserved.
     assert headers["Authorization"] == "Bearer forwarded.jwt.payload"

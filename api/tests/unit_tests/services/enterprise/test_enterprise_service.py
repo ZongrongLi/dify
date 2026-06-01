@@ -521,9 +521,7 @@ class TestIssueMCPToken:
         with patch(f"{MODULE}.EnterpriseRequest") as req:
             # 428 PreconditionRequired is what EE returns when there's no
             # stored SSO refresh token for the user.
-            req.send_request.side_effect = EnterpriseAPIError(
-                "user has not completed SSO", status_code=428
-            )
+            req.send_request.side_effect = EnterpriseAPIError("user has not completed SSO", status_code=428)
             with pytest.raises(MCPNoRefreshTokenError, match="SSO"):
                 self._call()
 
