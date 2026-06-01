@@ -2,6 +2,11 @@ import type { CommandOutput } from './output'
 import type { ArgDefinition, FlagDefinition, ICommand, InferArgs, InferFlags, OptionalArgValueType } from './types'
 import { parseArgv } from './flags'
 
+// What invoking a command does to remote/persistent state. Drives the skill's
+// safety section and the `effect` bit in machine-readable help. Defaults to
+// `read`; write/destructive commands must opt in explicitly.
+export type CommandEffect = 'read' | 'write' | 'destructive'
+
 export type CommandConstructor = {
   new(): Command
   description?: string
@@ -10,6 +15,7 @@ export type CommandConstructor = {
   examples?: string[]
   hidden?: boolean
   deprecated?: string
+  effect?: CommandEffect
 }
 
 type InferCommandArgs<C extends CommandConstructor> = C['args'] extends Record<string, ArgDefinition<string | undefined>>
@@ -30,6 +36,7 @@ export abstract class Command implements ICommand {
   static flags: Record<string, FlagDefinition<OptionalArgValueType>> = {}
   static args: Record<string, ArgDefinition<string | undefined>> = {}
   static examples: string[] = []
+  static effect: CommandEffect = 'read'
 
   abstract run(argv: string[]): Promise<CommandOutput | void>
 

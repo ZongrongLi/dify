@@ -1,3 +1,4 @@
+import type { CommandEffect } from '@/framework/command'
 import type { HttpClient } from '@/http/types'
 import { loadHosts } from '@/auth/hosts'
 import { DifyCommand } from '@/commands/_shared/dify-command'
@@ -9,6 +10,8 @@ import { runLogout } from './logout.js'
 
 export default class Logout extends DifyCommand {
   static override description = 'Log out of the active Dify host'
+
+  static override effect: CommandEffect = 'write'
 
   static override examples = [
     '<%= config.bin %> auth logout',
